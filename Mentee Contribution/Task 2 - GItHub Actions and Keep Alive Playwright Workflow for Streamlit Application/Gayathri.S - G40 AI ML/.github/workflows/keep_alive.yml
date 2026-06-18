@@ -1,0 +1,14 @@
+name: Keep Streamlit App Alive
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  keep_alive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Streamlit App
+        run: curl -I https://gayathri-249-quality-of-life-intelligence-p-dashboardapp-dokjkw.streamlit.app/
