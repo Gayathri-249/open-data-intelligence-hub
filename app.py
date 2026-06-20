@@ -22,7 +22,7 @@ analyze Quality of Life factors.
 # -----------------------------
 @st.cache_data
 def load_data():
-    return pl.read_csv("data/world_happiness.csv")
+    return pd.read_csv("data/world_happiness.csv")
 
 df = load_data()
 
