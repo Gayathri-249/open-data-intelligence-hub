@@ -13,7 +13,8 @@ st.set_page_config(
 st.title("🌍 Quality of Life Intelligence Platform")
 
 st.markdown("""
-Compare countries using World Happiness Report indicators and analyze Quality of Life factors.
+Compare countries using World Happiness Report indicators
+and analyze Quality of Life factors.
 """)
 
 # -----------------------------
@@ -22,47 +23,52 @@ Compare countries using World Happiness Report indicators and analyze Quality of
 @st.cache_data
 def load_data():
     df = pd.read_csv("data/world_happiness.csv")
+
+    # clean column names (VERY IMPORTANT)
+    df.columns = df.columns.str.strip()
+
     return df
+
 
 df = load_data()
 
 # -----------------------------
-# CLEAN DATA
+# CHECK DATA LOADED
 # -----------------------------
-df = df.dropna()
-
-# -----------------------------
-# SAFE COLUMN DETECTION FUNCTION
-# -----------------------------
-def get_col(df, options):
-    for col in options:
-        if col in df.columns:
-            return df[col]
-    return None
-
-# -----------------------------
-# MAP COLUMNS SAFELY
-# -----------------------------
-df["Country"] = get_col(df, ["Country name", "Country"])
-df["GDP"] = get_col(df, ["Log GDP per capita", "GDP per capita"])
-df["Health"] = get_col(df, ["Healthy life expectancy"])
-df["Freedom"] = get_col(df, ["Freedom to make life choices"])
-df["Social Support"] = get_col(df, ["Social support"])
-df["Generosity"] = get_col(df, ["Generosity"])
-df["Corruption"] = get_col(df, ["Perceptions of corruption"])
-df["Happiness Score"] = get_col(df, ["Life Ladder", "Happiness score", "Happiness Score"])
-
-# -----------------------------
-# VALIDATION CHECK
-# -----------------------------
-required = ["Country", "GDP", "Health", "Freedom", "Social Support", "Happiness Score"]
-
-if any(df[col] is None for col in required):
-    st.error("❌ Dataset columns do not match expected World Happiness format.")
+if df.empty:
+    st.error("Dataset not loaded. Check CSV path inside /data folder.")
     st.stop()
 
 # -----------------------------
-# QoL SCORE
+# SAFE COLUMN MAPPING (FIXED)
+# -----------------------------
+rename_map = {
+    "Country name": "Country",
+    "Life Ladder": "Happiness Score",
+    "Log GDP per capita": "GDP",
+    "Social support": "Social Support",
+    "Healthy life expectancy at birth": "Health",
+    "Freedom to make life choices": "Freedom",
+    "Generosity": "Generosity",
+    "Perceptions of corruption": "Corruption"
+}
+
+df = df.rename(columns=rename_map)
+
+# keep only required columns safely
+required_cols = [
+    "Country", "Happiness Score", "GDP",
+    "Social Support", "Health",
+    "Freedom", "Generosity", "Corruption"
+]
+
+df = df[[col for col in required_cols if col in df.columns]]
+
+# remove missing values
+df = df.dropna()
+
+# -----------------------------
+# QUALITY OF LIFE SCORE
 # -----------------------------
 df["QoL Score"] = (
     df["Happiness Score"] * 0.30 +
@@ -70,8 +76,8 @@ df["QoL Score"] = (
     df["Health"] * 0.15 +
     df["Freedom"] * 0.15 +
     df["Social Support"] * 0.10 +
-    df["Generosity"].fillna(0) * 0.05 +
-    df["Corruption"].fillna(0) * 0.05
+    df["Generosity"] * 0.05 +
+    df["Corruption"] * 0.05
 )
 
 # -----------------------------
@@ -91,9 +97,9 @@ if page == "Overview":
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric("Countries", df["Country"].nunique())
+    col1.metric("Countries", len(df))
     col2.metric("Avg QoL Score", round(df["QoL Score"].mean(), 2))
-    col3.metric("Records", len(df))
+    col3.metric("Max QoL Score", round(df["QoL Score"].max(), 2))
 
     st.subheader("Dataset Preview")
     st.dataframe(df.head(20))
@@ -103,23 +109,35 @@ if page == "Overview":
 # -----------------------------
 elif page == "Country Comparison":
 
-    st.header("⚖️ Compare Countries")
+    st.header("🔍 Country Comparison")
 
-    countries = sorted(df["Country"].dropna().unique())
+    countries = df["Country"].dropna().unique()
 
     c1 = st.selectbox("Country 1", countries)
     c2 = st.selectbox("Country 2", countries, index=1)
 
-    compare_df = df[df["Country"].isin([c1, c2])]
+    compare = df[df["Country"].isin([c1, c2])]
 
-    st.dataframe(compare_df)
+    st.dataframe(compare)
+
+    st.subheader("Comparison Chart")
+
+    fig = px.bar(
+        compare.melt(id_vars="Country"),
+        x="variable",
+        y="value",
+        color="Country",
+        barmode="group"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
 # TOP RANKINGS
 # -----------------------------
 elif page == "Top Rankings":
 
-    st.header("🏆 Top 10 Countries")
+    st.header("🏆 Top Countries")
 
     top10 = df.sort_values("QoL Score", ascending=False).head(10)
 
@@ -128,8 +146,7 @@ elif page == "Top Rankings":
     fig = px.bar(
         top10,
         x="Country",
-        y="QoL Score",
-        title="Top 10 Countries by Quality of Life"
+        y="QoL Score"
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -161,14 +178,10 @@ elif page == "Analytics":
     )
     st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("Correlation Matrix")
+    st.subheader("Correlation Heatmap")
 
     numeric_df = df.select_dtypes(include="number")
     corr = numeric_df.corr()
 
-    fig3 = px.imshow(
-        corr,
-        text_auto=True,
-        title="Correlation Matrix"
-    )
+    fig3 = px.imshow(corr, text_auto=True)
     st.plotly_chart(fig3, use_container_width=True)
